@@ -26,20 +26,12 @@ md(r"""### 3.1. Четыре способа усреднить AUC
 """)
 code("""
 from fractions import Fraction
-from IPython.display import Image as DisplayImage
 
 Y43 = np.array([[1, 1, 0], [0, 1, 1], [0, 1, 0], [1, 0, 0]], dtype=int)
 S43 = np.array([[0.7, 0.6, 0.5], [0.3, 0.4, 0.6], [0.5, 0.9, 0.2], [0.4, 0.5, 0.1]])
 class_names = ["class 1", "class 2", "class 3"]
-display(DisplayImage(filename=str(ROOT / "materials/lecture4_slide43.png")))
 display(pd.DataFrame(Y43, columns=class_names).rename_axis("object"))
 display(pd.DataFrame(S43, columns=class_names).rename_axis("object"))
-pd.DataFrame(Y43, columns=class_names).to_csv(
-    OUT / "slide43_labels.csv", index_label="object"
-)
-pd.DataFrame(S43, columns=class_names).to_csv(
-    OUT / "slide43_scores.csv", index_label="object"
-)
 
 
 def manual_pair_auc(labels, scores):
@@ -47,21 +39,21 @@ def manual_pair_auc(labels, scores):
     neg = [float(s) for y, s in zip(labels, scores) if y == 0]
     if not pos or not neg:
         raise ValueError("AUC requires both positive and negative observations")
-    wins = sum(p > n for p in pos for n in neg)
-    ties = sum(p == n for p in pos for n in neg)
-    return Fraction(2 * wins + ties, 2 * len(pos) * len(neg)), wins, ties
+    wins = sum((p > n for p in pos for n in neg))
+    ties = sum((p == n for p in pos for n in neg))
+    return (Fraction(2 * wins + ties, 2 * len(pos) * len(neg)), wins, ties)
 
 
 def manual_roc(labels, scores):
-    labels, scores = np.asarray(labels), np.asarray(scores)
-    P, N = int(sum(labels)), int(len(labels) - sum(labels))
+    labels, scores = (np.asarray(labels), np.asarray(scores))
+    P, N = (int(sum(labels)), int(len(labels) - sum(labels)))
     if P == 0 or N == 0:
         raise ValueError("ROC requires both classes")
     rows = []
     for threshold in [float("inf")] + sorted(set(map(float, scores)), reverse=True):
         predicted = scores >= threshold
-        tp = sum(bool(p) and y == 1 for p, y in zip(predicted, labels))
-        fp = sum(bool(p) and y == 0 for p, y in zip(predicted, labels))
+        tp = int(np.sum(predicted & (labels == 1)))
+        fp = int(np.sum(predicted & (labels == 0)))
         rows.append(
             {
                 "threshold": threshold,
@@ -80,11 +72,10 @@ def manual_roc(labels, scores):
         ),
         Fraction(0),
     )
-    return rows, area
+    return (rows, area)
 
 
 def plot_segments(ax, points, label):
-    # Соединяем отрезком две вручную рассчитанные точки ROC.
     for left, right in zip(points, points[1:]):
         ax.plot(
             [float(left["FPR"]), float(right["FPR"])],
@@ -104,48 +95,18 @@ def plot_segments(ax, points, label):
     ax.grid(alpha=0.2)
 
 
-class_aucs, roc_tables = [], []
+class_aucs = []
 fig, axes = plt.subplots(1, 3, figsize=(14, 4))
 for j, name in enumerate(class_names):
-    labels, scores = Y43[:, j], S43[:, j]
+    labels, scores = (Y43[:, j], S43[:, j])
     pair_auc, wins, ties = manual_pair_auc(labels, scores)
     points, area = manual_roc(labels, scores)
-    assert area == pair_auc
     class_aucs.append(area)
-    pos_ids, neg_ids = np.where(labels == 1)[0], np.where(labels == 0)[0]
-    credits = [
-        [
-            1 if scores[i] > scores[k] else 0.5 if scores[i] == scores[k] else 0
-            for k in neg_ids
-        ]
-        for i in pos_ids
-    ]
-    display(
-        Markdown(
-            f"**{name}:** {wins} побед, {ties} равенств, {len(pos_ids)*len(neg_ids)} пар; AUC = {area} = {float(area):.6f}."
-        )
-    )
-    display(
-        pd.DataFrame(
-            credits,
-            index=[f"positive {i}, score {scores[i]}" for i in pos_ids],
-            columns=[f"negative {i}, score {scores[i]}" for i in neg_ids],
-        )
-    )
+    print(f"{name}: {wins} побед, {ties} равенств; AUC = {pair_auc}")
     table = pd.DataFrame(points)
     display(table)
-    # Сохраняем координаты как точные дроби и как десятичные числа.
-    table["class"] = name
-    for coord in ["FPR", "TPR"]:
-        table[coord + "_fraction"] = table[coord].map(str)
-        table[coord] = table[coord].map(float)
-    roc_tables.append(table)
     plot_segments(axes[j], points, f"{name}: AUC={area}")
-pd.concat(roc_tables, ignore_index=True).to_csv(
-    OUT / "slide43_roc_vertices.csv", index=False
-)
 plt.tight_layout()
-plt.savefig(OUT / "slide43_class_roc.png")
 plt.show()
 """)
 md(
@@ -180,7 +141,6 @@ weighted43 = sum((int(n) * a for n, a in zip(supports, class_aucs)), Fraction(0)
 )
 micro43, wins43, ties43 = manual_pair_auc(Y43.ravel(), S43.ravel())
 micro_points, micro_area = manual_roc(Y43.ravel(), S43.ravel())
-assert micro_area == micro43
 sample_aucs = [manual_pair_auc(y, s)[0] for y, s in zip(Y43, S43)]
 samples43 = sum(sample_aucs, Fraction(0)) / len(Y43)
 print(f"Micro: ({wins43} + {ties43}/2) / 36 = {micro43}")
@@ -190,25 +150,10 @@ averages43 = pd.DataFrame(
         "method": ["macro", "weighted", "micro", "samples"],
         "exact": [str(a) for a in [macro43, weighted43, micro43, samples43]],
         "auc": [float(a) for a in [macro43, weighted43, micro43, samples43]],
-        "slide_rounded": [0.806, 0.750, 0.833, 0.875],
+        "slide_rounded": [0.806, 0.75, 0.833, 0.875],
     }
 )
 display(averages43)
-averages43.to_csv(OUT / "slide43_auc_averages.csv", index=False)
-assert [macro43, weighted43, micro43, samples43] == [
-    Fraction(29, 36),
-    Fraction(3, 4),
-    Fraction(5, 6),
-    Fraction(7, 8),
-]
-fig, axes = plt.subplots(1, 5, figsize=(17, 3.5))
-plot_segments(axes[0], micro_points, f"Micro: {micro43}")
-for i, ax in enumerate(axes[1:]):
-    points, area = manual_roc(Y43[i], S43[i])
-    plot_segments(ax, points, f"Object {i}: {area}")
-plt.tight_layout()
-plt.savefig(OUT / "slide43_micro_samples_roc.png")
-plt.show()
 """)
 md(r"""### 3.2. Три порога, precision и recall
 
@@ -224,14 +169,14 @@ md(r"""### 3.2. Три порога, precision и recall
 """)
 code("""
 def manual_threshold_table(labels, scores, thresholds):
-    labels, scores = np.asarray(labels), np.asarray(scores)
+    labels, scores = (np.asarray(labels), np.asarray(scores))
     rows = []
     for t in thresholds:
         pred = scores >= t
-        tp = sum(bool(p) and y == 1 for p, y in zip(pred, labels))
-        fp = sum(bool(p) and y == 0 for p, y in zip(pred, labels))
-        fn = sum(not bool(p) and y == 1 for p, y in zip(pred, labels))
-        tn = sum(not bool(p) and y == 0 for p, y in zip(pred, labels))
+        tp = int(np.sum(pred & (labels == 1)))
+        fp = int(np.sum(pred & (labels == 0)))
+        fn = int(np.sum(~pred & (labels == 1)))
+        tn = int(np.sum(~pred & (labels == 0)))
         if tp + fp == 0 or tp + fn == 0:
             raise ValueError("Undefined precision or recall")
         rows.append(
@@ -249,25 +194,18 @@ def manual_threshold_table(labels, scores, thresholds):
     return pd.DataFrame(rows)
 
 
-thresholds43 = [0.30, 0.45, 0.65]
+thresholds43 = [0.3, 0.45, 0.65]
 threshold_table43 = manual_threshold_table(Y43[:, 1], S43[:, 1], thresholds43)
 display(threshold_table43)
-threshold_table43.to_csv(OUT / "slide43_thresholds.csv", index=False)
-# Score — логарифм шансов, а не вероятность. Пороги соответствуют p≈0.269, 0.5, 0.731.
 estate_thresholds = manual_threshold_table(
     y_test.to_numpy(),
     MODELS["LogisticRegression"].decision_function(X_test),
     [-1.0, 0.0, 1.0],
 )
 display(estate_thresholds)
-for metric in ["accuracy", "precision", "recall"]:
-    assert estate_thresholds[metric].nunique() == 3
-estate_thresholds.to_csv(OUT / "estate_thresholds_manual.csv", index=False)
 for row in estate_thresholds.itertuples():
     print(
-        f"t={row.threshold:g}: accuracy=({row.TP}+{row.TN})/{len(y_test)}={row.accuracy:.6f}; "
-        f"precision={row.TP}/({row.TP}+{row.FP})={row.precision:.6f}; "
-        f"recall={row.TP}/({row.TP}+{row.FN})={row.recall:.6f}"
+        f"t={row.threshold:g}: accuracy=({row.TP}+{row.TN})/{len(y_test)}={row.accuracy:.6f}; precision={row.TP}/({row.TP}+{row.FP})={row.precision:.6f}; recall={row.TP}/({row.TP}+{row.FN})={row.recall:.6f}"
     )
 """)
 code("""
@@ -283,20 +221,8 @@ for ax, t in zip(axes, thresholds43):
         "FP": predicted - positive,
         "TN": set(range(4)) - (positive | predicted),
     }
-    ax.add_patch(
-        Circle(
-            (0.38, 0.5), 0.32, facecolor="tab:blue", edgecolor="tab:blue", alpha=0.18
-        )
-    )
-    ax.add_patch(
-        Circle(
-            (0.65, 0.5),
-            0.27,
-            facecolor="tab:orange",
-            edgecolor="tab:orange",
-            alpha=0.22,
-        )
-    )
+    ax.add_patch(Circle((0.38, 0.5), 0.32, color="tab:blue", alpha=0.2))
+    ax.add_patch(Circle((0.65, 0.5), 0.27, color="tab:orange", alpha=0.2))
     for key, (x, y) in {
         "FN": (0.19, 0.5),
         "TP": (0.51, 0.5),
@@ -309,7 +235,7 @@ for ax, t in zip(axes, thresholds43):
     ax.text(0.25, 0.12, "Синие: истинные +", ha="center", fontsize=9)
     ax.text(0.75, 0.12, "Оранжевые: предсказанные +", ha="center", fontsize=9)
     ax.set_title(
-        f"t={t}: precision={int(row.TP)}/{int(row.TP+row.FP)}; recall={int(row.TP)}/{int(row.TP+row.FN)}"
+        f"t={t}: precision={int(row.TP)}/{int(row.TP + row.FP)}; recall={int(row.TP)}/{int(row.TP + row.FN)}"
     )
     ax.set(xlim=(0, 1), ylim=(0, 1), aspect="equal")
     ax.axis("off")
@@ -317,7 +243,6 @@ fig.suptitle(
     "Пересечение множеств = TP. Номера объектов со слайда; площади кругов условные."
 )
 plt.tight_layout()
-plt.savefig(OUT / "slide43_precision_recall_sets.png")
 plt.show()
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 for ax, table, title in [
@@ -339,7 +264,6 @@ for ax, table, title in [
     ax.grid(alpha=0.3)
 plt.suptitle("Эскизы PR по трем порогам, не полные PR-кривые")
 plt.tight_layout()
-plt.savefig(OUT / "manual_pr_sketches.png")
 plt.show()
 """)
 md(

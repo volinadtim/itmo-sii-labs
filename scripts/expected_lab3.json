@@ -1,0 +1,38 @@
+{
+  "metrics": {
+    "Dummy": {
+      "accuracy": 0.7672064777327935,
+      "balanced_accuracy": 0.5,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "roc_auc": 0.5,
+      "AP": 0.23279352226720648
+    },
+    "LogisticRegression": {
+      "accuracy": 0.8970503181029497,
+      "balanced_accuracy": 0.8935348006358674,
+      "precision": 0.7293156281920327,
+      "recall": 0.8869565217391304,
+      "f1": 0.8004484304932735,
+      "roc_auc": 0.9652429102878963,
+      "AP": 0.9044769456210487
+    },
+    "SVC_linear": {
+      "accuracy": 0.8956043956043956,
+      "balanced_accuracy": 0.8930251233222439,
+      "precision": 0.7251521298174443,
+      "recall": 0.8881987577639752,
+      "f1": 0.7984366275823562,
+      "roc_auc": 0.9650504643752648,
+      "AP": 0.903799395256592
+    }
+  },
+  "data": {
+    "csv_sha256": "d1597175a43b060793a7c04717279277e5bef7ae3e691b633edd45f38d572f98",
+    "random_state": 67,
+    "threshold": 500000,
+    "n_train": 13832,
+    "n_test": 3458
+  }
+}

@@ -1,7 +1,0 @@
-{
-  "csv_sha256":"d1597175a43b060793a7c04717279277e5bef7ae3e691b633edd45f38d572f98",
-  "random_state":67,
-  "threshold":500000,
-  "n_train":13832,
-  "n_test":3458
-}

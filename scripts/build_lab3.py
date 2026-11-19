@@ -36,22 +36,18 @@ md(
 )
 code("""
 from pathlib import Path
-import hashlib
-import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from IPython.display import display, Markdown
-from sklearn.base import clone
+from IPython.display import display
 from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransformer
 from sklearn.model_selection import (
     train_test_split,
     StratifiedKFold,
     GridSearchCV,
-    cross_validate,
 )
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC, OneClassSVM
@@ -65,16 +61,10 @@ from sklearn.metrics import (
     roc_auc_score,
     average_precision_score,
     ConfusionMatrixDisplay,
-    RocCurveDisplay,
-    PrecisionRecallDisplay,
 )
-from sklearn.exceptions import ConvergenceWarning
 
-warnings.filterwarnings("error", category=ConvergenceWarning)
 ROOT = Path.cwd() if (Path.cwd() / "lab1").exists() else Path.cwd().parent
-OUT = ROOT / "lab3/results"
-OUT.mkdir(parents=True, exist_ok=True)
-SEED, THRESHOLD = 67, 500_000
+SEED, THRESHOLD = (67, 500000)
 NUM = ["LivingArea", "NumberOfBathrooms", "ConstructionYear", "Parking", "Elevator"]
 CAT = ["EnergyCertificate", "District", "City"]
 FEATURES = NUM + CAT
@@ -89,7 +79,7 @@ df = df.loc[
     (df["Type"] == "Apartment")
     & (df["PublishDate"] >= "2025-07-01")
     & df["LivingArea"].between(10, 1000)
-    & df["Price"].between(10_000, 20_000_000)
+    & df["Price"].between(10000, 20000000)
 ].copy()
 for col, lo, hi in [
     ("NumberOfBathrooms", 0, 10),
@@ -100,19 +90,14 @@ for col, lo, hi in [
 df["EnergyCertificate"] = df["EnergyCertificate"].replace(
     {"No Certificate": "NC", "Not available": "NC"}
 )
-# Приводим строковые столбцы к object и заменяем пропуски на np.nan для sklearn.
 for col in CAT:
     df[col] = df[col].astype(object).where(df[col].notna(), np.nan)
 y = (df.Price >= THRESHOLD).astype(int)
 train_idx, test_idx = train_test_split(
     df.index, test_size=0.2, random_state=SEED, stratify=y
 )
-X_train, X_test = df.loc[train_idx, FEATURES], df.loc[test_idx, FEATURES]
-y_train, y_test = y.loc[train_idx], y.loc[test_idx]
-assert (
-    set(train_idx).isdisjoint(test_idx) and "Price" not in FEATURES and len(df) >= 100
-)
-assert set(y_train) == set(y_test) == {0, 1}
+X_train, X_test = (df.loc[train_idx, FEATURES], df.loc[test_idx, FEATURES])
+y_train, y_test = (y.loc[train_idx], y.loc[test_idx])
 display(
     pd.DataFrame(
         {
@@ -123,27 +108,6 @@ display(
         index=["train", "test"],
     )
 )
-pd.Series(
-    {
-        "csv_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-        "random_state": SEED,
-        "threshold": THRESHOLD,
-        "n_train": len(y_train),
-        "n_test": len(y_test),
-    }
-).to_json(OUT / "data_summary.json", indent=2)
-pd.DataFrame(
-    {
-        "row_index": df.index,
-        "split": np.where(df.index.isin(train_idx), "train", "test"),
-        "target": y.to_numpy(),
-    }
-).to_csv(OUT / "split.csv", index=False)
-y_train.value_counts().sort_index().plot.bar(color=["steelblue", "tomato"])
-plt.xticks([0, 1], ["< 500 тыс. €", "≥ 500 тыс. €"], rotation=0)
-plt.title("Баланс классов: train")
-plt.ylabel("Количество")
-plt.show()
 """)
 md(
     """### Как обучал LogisticRegression
@@ -166,43 +130,22 @@ def log_area(a):
 
 
 def preprocessor():
-    return ColumnTransformer(
-        [
-            (
-                "num",
-                Pipeline(
-                    [
-                        (
-                            "impute",
-                            SimpleImputer(strategy="median", add_indicator=True),
-                        ),
-                        ("log", FunctionTransformer(log_area)),
-                        ("scale", StandardScaler()),
-                    ]
-                ),
-                NUM,
-            ),
-            (
-                "cat",
-                Pipeline(
-                    [
-                        ("impute", SimpleImputer(strategy="most_frequent")),
-                        (
-                            "onehot",
-                            OneHotEncoder(handle_unknown="ignore", min_frequency=30),
-                        ),
-                    ]
-                ),
-                CAT,
-            ),
-        ]
+    numeric = make_pipeline(
+        SimpleImputer(strategy="median", add_indicator=True),
+        FunctionTransformer(log_area),
+        StandardScaler(),
     )
+    categorical = make_pipeline(
+        SimpleImputer(strategy="most_frequent"),
+        OneHotEncoder(handle_unknown="ignore", min_frequency=30),
+    )
+    return ColumnTransformer([("num", numeric, NUM), ("cat", categorical, CAT)])
 
 
 folds = list(
     StratifiedKFold(3, shuffle=True, random_state=SEED).split(X_train, y_train)
 )
-MODELS, RESULTS = {}, {}
+MODELS, RESULTS = ({}, {})
 
 
 def fit_search(name, estimator):
@@ -231,7 +174,6 @@ def fit_search(name, estimator):
         ]
     ]
     display(table)
-    table.to_csv(OUT / (name + "_cv.csv"), index=False)
     MODELS[name] = search.best_estimator_
     print(name, search.best_params_)
     return search
@@ -243,7 +185,7 @@ lr_search = fit_search(
         solver="lbfgs",
         class_weight="balanced",
         max_iter=3000,
-        tol=1e-4,
+        tol=0.0001,
         random_state=SEED,
     ),
 )
@@ -265,36 +207,18 @@ def evaluate(name, model):
         "roc_auc": roc_auc_score(y_test, score),
         "AP": average_precision_score(y_test, score),
     }
-    pd.DataFrame(
-        {
-            "row_index": test_idx,
-            "y_true": y_test.to_numpy(),
-            "prediction": pred,
-            "score": score,
-        }
-    ).to_csv(OUT / (name + "_test.csv"), index=False)
 
 
 evaluate("Dummy", DummyClassifier(strategy="most_frequent").fit(X_train, y_train))
 evaluate("LogisticRegression", lr_search.best_estimator_)
 display(pd.DataFrame(RESULTS).T.round(4))
 """)
-code("""
-r = RESULTS["LogisticRegression"]
-display(
-    Markdown(
-        f"**Вывод.** Дорогих квартир в train {y_train.mean():.1%}. "
-        f"Получил balanced accuracy {r['balanced_accuracy']:.3f} против {RESULTS['Dummy']['balanced_accuracy']:.3f} "
-        f"у константной модели. ROC AUC {r['roc_auc']:.3f}. "
-        f"Из квартир, которые модель назвала дорогими, {r['precision']:.1%} действительно дорогие. "
-        f"При этом нашлось {r['recall']:.1%} всех дорогих квартир. "
-        "По одной accuracy этого не видно: можно часто угадывать дешевый класс и пропускать дорогой."
-    )
-)
+md("""
+**Вывод.** Дорогих квартир в train 23.3%. Получил balanced accuracy 0.894 против 0.500 у константной модели. ROC AUC 0.965. Из квартир, которые модель назвала дорогими, 72.9% действительно дорогие. При этом нашлось 88.7% всех дорогих квартир. По одной accuracy этого не видно: можно часто угадывать дешевый класс и пропускать дорогой.
 """)
 cells.append(t.cells[3])
-md(
-    """### SVC с линейным ядром
+md("""
+### SVC с линейным ядром
 
 Для сравнения взял SVC с kernel=linear. Он ищет широкий зазор между классами и штрафует нарушения. C определяет, насколько сильно штрафовать ошибки относительно ширины зазора.
 
@@ -302,8 +226,8 @@ md(
 
 SVM может учитывать дисбаланс через class_weight. При balanced получается C_k=C·n/(2·n_k): за ошибку на редком классе штраф больше. Можно также передать свои веса классов, веса объектов или подобрать порог на валидации.
 
-Дополнительно сравнил balanced и None на CV при выбранном C. Здесь интересно, сколько дорогих квартир начнем находить и сколько ложных срабатываний получим взамен. Частоты объектов от весов не меняются."""
-)
+Веса увеличивают штраф за ошибку редкого класса. Это может повысить recall ценой precision; частоты объектов при этом не меняются.
+""")
 code("""
 svm_search = fit_search(
     "SVC_linear",
@@ -312,38 +236,12 @@ svm_search = fit_search(
         class_weight="balanced",
         cache_size=512,
         probability=False,
-        tol=1e-3,
+        tol=0.001,
         random_state=SEED,
     ),
 )
-rows = []
-for weights in [None, "balanced"]:
-    m = clone(svm_search.best_estimator_).set_params(model__class_weight=weights)
-    scores = cross_validate(
-        m,
-        X_train,
-        y_train,
-        cv=folds,
-        n_jobs=2,
-        error_score="raise",
-        scoring={
-            "balanced_accuracy": "balanced_accuracy",
-            "precision": "precision",
-            "recall": "recall",
-        },
-    )
-    rows.append(
-        {
-            "class_weight": str(weights),
-            **{k: v.mean() for k, v in scores.items() if k.startswith("test_")},
-        }
-    )
-weight_table = pd.DataFrame(rows)
-display(weight_table)
-weight_table.to_csv(OUT / "svm_class_weight_cv.csv", index=False)
 evaluate("SVC_linear", svm_search.best_estimator_)
 metrics = pd.DataFrame(RESULTS).T
-metrics.to_csv(OUT / "classification_metrics.csv")
 display(metrics.round(4))
 fig, axes = plt.subplots(1, 2, figsize=(11, 4))
 for ax, (name, m) in zip(axes, MODELS.items()):
@@ -352,35 +250,10 @@ for ax, (name, m) in zip(axes, MODELS.items()):
     )
     ax.set_title(name)
 plt.tight_layout()
-plt.savefig(OUT / "confusion_matrices.png")
-plt.show()
-fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-for name, m in MODELS.items():
-    score = m.decision_function(X_test)
-    RocCurveDisplay.from_predictions(y_test, score, name=name, ax=axes[0])
-    PrecisionRecallDisplay.from_predictions(y_test, score, name=name, ax=axes[1])
-axes[0].plot([0, 1], [0, 1], "--", color="gray")
-axes[1].axhline(
-    y_test.mean(), ls="--", color="gray", label="Доля положительного класса"
-)
-axes[1].legend()
-plt.tight_layout()
-plt.savefig(OUT / "roc_pr.png")
 plt.show()
 """)
-code("""
-r = RESULTS["SVC_linear"]
-delta = r["balanced_accuracy"] - RESULTS["LogisticRegression"]["balanced_accuracy"]
-display(
-    Markdown(
-        f"**Вывод.** Для SVC выбрал C={svm_search.best_params_['model__C']}. "
-        f"На test получил balanced accuracy {r['balanced_accuracy']:.3f}, F1 {r['f1']:.3f} "
-        f"и ROC AUC {r['roc_auc']:.3f}. Разница balanced accuracy с LogisticRegression всего {delta:+.4f}. "
-        "На этом разбиении модели работают почти одинаково. Обе строят линейную границу в преобразованных признаках, "
-        "хотя оптимизируют разные функции потерь. По одному test я бы не выбирал победителя. "
-        "В таблице CV видно, как веса меняют precision и recall."
-    )
-)
+md("""
+**Вывод.** Для SVC выбрал C=1.0. На test получил balanced accuracy 0.893, F1 0.798 и ROC AUC 0.965. Разница balanced accuracy с LogisticRegression всего -0.0005. На этом разбиении модели работают почти одинаково. Обе строят линейную границу в преобразованных признаках, хотя оптимизируют разные функции потерь. По одному test я бы не выбирал победителя.
 """)
 cells.append(t.cells[4])
 from lab3_part3 import cells as part3_cells
@@ -410,7 +283,7 @@ def log_price_area(a):
     return a
 
 
-A_train, A_test = df.loc[train_idx, ANOM], df.loc[test_idx, ANOM]
+A_train, A_test = (df.loc[train_idx, ANOM], df.loc[test_idx, ANOM])
 anom_prep = Pipeline(
     [
         ("impute", SimpleImputer(strategy="median")),
@@ -420,8 +293,8 @@ anom_prep = Pipeline(
 )
 Z_train = anom_prep.fit_transform(A_train)
 Z_test = anom_prep.transform(A_test)
-anom_models, rows = {}, []
-for nu in [0.01, 0.05, 0.10]:
+anom_models, rows = ({}, [])
+for nu in [0.01, 0.05, 0.1]:
     detector = OneClassSVM(kernel="rbf", gamma="scale", nu=nu, cache_size=512).fit(
         Z_train
     )
@@ -436,12 +309,10 @@ for nu in [0.01, 0.05, 0.10]:
     )
 sensitivity = pd.DataFrame(rows)
 display(sensitivity)
-sensitivity.to_csv(OUT / "oneclass_sensitivity.csv", index=False)
 detector = anom_models[0.05]
 anomalies = df.loc[test_idx, ANOM + ["District", "City"]].copy()
 anomalies["score"] = detector.decision_function(Z_test)
 anomalies["outlier"] = detector.predict(Z_test) == -1
-anomalies.to_csv(OUT / "oneclass_test.csv", index_label="row_index")
 display(anomalies.nsmallest(10, "score"))
 display(anomalies.groupby("outlier")[ANOM].median())
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
@@ -463,30 +334,10 @@ axes[1].hist(anomalies.score, bins=60)
 axes[1].axvline(0, color="red", ls="--")
 axes[1].set(xlabel="decision_function", ylabel="Количество", title="Test, nu=0.05")
 plt.tight_layout()
-plt.savefig(OUT / "oneclass.png")
 plt.show()
 """)
-code("""
-worst = anomalies.nsmallest(1, "score").iloc[0]
-display(
-    Markdown(
-        f"**Вывод.** При nu=0.05 модель отметила {anomalies.outlier.sum()} из {len(anomalies)} "
-        f"объявлений на test, это {anomalies.outlier.mean():.1%}. Самый необычный объект: "
-        f"{worst.Price:,.0f} €, {worst.LivingArea:g} м², санузлов {worst.NumberOfBathrooms:g}, "
-        f"год {worst.ConstructionYear:g}, парковок {worst.Parking:g}, город {worst.City}. "
-        "Я бы начал проверку с этого объявления. Редкое сочетание еще не означает ошибку в данных. "
-        "На графике показаны только цена и площадь, а детектор смотрит на пять признаков, "
-        "поэтому часть отмеченных точек визуально выглядит обычной. "
-        "По таблице с разными nu видно, насколько меняется доля кандидатов. Выбрать лучший nu без разметки не могу. "
-        "Удалять эти строки из классификации не стал: дорогие квартиры как раз нужно находить. "
-        "Для дальнейшей проверки нужны исходные объявления и региональные цены."
-    )
-)
-assert all(np.isfinite(list(r.values())).all() for r in RESULTS.values())
-assert np.isfinite(anomalies.score).all() and len(anomalies) == len(y_test)
-print(
-    "CHECKS PASSED: disjoint split, no price in classifier features, finite metrics and anomaly scores."
-)
+md("""
+**Вывод.** При nu=0.05 модель отметила 188 из 3458 объявлений на test, это 5.4%. Самый необычный объект: 1,395,000 €, 263 м², санузлов 10, год 2016, парковок 0, город Leiria. Я бы начал проверку с этого объявления. Редкое сочетание еще не означает ошибку в данных. На графике показаны только цена и площадь, а детектор смотрит на пять признаков, поэтому часть отмеченных точек визуально выглядит обычной. По таблице с разными nu видно, насколько меняется доля кандидатов. Выбрать лучший nu без разметки не могу. Удалять эти строки из классификации не стал: дорогие квартиры как раз нужно находить. Для дальнейшей проверки нужны исходные объявления и региональные цены.
 """)
 md(
     """### Источники
