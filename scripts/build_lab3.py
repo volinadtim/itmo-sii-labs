@@ -18,9 +18,7 @@ cells.extend(t.cells[:2])
 md(
     """Данилов Тимофей и Пивоваров Роман.
 
-Выполнены задания 1–4. Задания 1, 2 и 4 подготовил Тимофей, задание 3 подготовил Роман. В задании 3 использован пример со слайда 43, в остальных заданиях датасет квартир.
-
-Взял [объявления о недвижимости в Португалии](https://www.kaggle.com/datasets/luvathoms/portugal-real-estate-2024) из ЛР1–2. Ноутбук запускается из папки lab3 или корня репозитория."""
+Взял [объявления о недвижимости в Португалии](https://www.kaggle.com/datasets/luvathoms/portugal-real-estate-2024) из ЛР1–2."""
 )
 cells.append(t.cells[2])
 md(
@@ -102,7 +100,7 @@ for col, lo, hi in [
 df["EnergyCertificate"] = df["EnergyCertificate"].replace(
     {"No Certificate": "NC", "Not available": "NC"}
 )
-# pandas string columns are converted to object with np.nan for sklearn imputers.
+# Приводим строковые столбцы к object и заменяем пропуски на np.nan для sklearn.
 for col in CAT:
     df[col] = df[col].astype(object).where(df[col].notna(), np.nan)
 y = (df.Price >= THRESHOLD).astype(int)
@@ -494,7 +492,6 @@ md(
     """### Источники
 
 - [Датасет Kaggle](https://www.kaggle.com/datasets/luvathoms/portugal-real-estate-2024).
-- Шаблон преподавателя от 10.10.2026, сохранен в materials/Lab3.ipynb.
 - [LogisticRegression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html).
 - [SVC](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html).
 - [Поиск выбросов и новизны](https://scikit-learn.org/stable/modules/outlier_detection.html)."""

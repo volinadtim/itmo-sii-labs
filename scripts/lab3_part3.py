@@ -15,8 +15,6 @@ def code(s):
 
 md(r"""### 3.1. Четыре способа усреднить AUC
 
-Для расчетов взял матрицы со слайда 43 лекции «Ошибки и Ф качества». Изображение сохранено в materials/lecture4_slide43.png, сведения об исходном PDF рядом. Ниже вывожу его вместе с оцифрованными значениями.
-
 На слайде задача **multilabel**: у объектов 0 и 1 по два правильных класса. В обычной многоклассовой задаче у каждого объекта только один класс. Это различие нужно для пообъектного усреднения. Значения score на слайде не нормированы по строкам; для независимых меток сумма вероятностей не обязана равняться единице.
 
 - **Macro:** считаю AUC отдельно для каждого столбца «этот класс против остальных», затем беру обычное среднее. Каждый класс имеет одинаковый вес.
@@ -86,7 +84,7 @@ def manual_roc(labels, scores):
 
 
 def plot_segments(ax, points, label):
-    # Each segment connects two manually calculated ROC vertices.
+    # Соединяем отрезком две вручную рассчитанные точки ROC.
     for left, right in zip(points, points[1:]):
         ax.plot(
             [float(left["FPR"]), float(right["FPR"])],
@@ -136,7 +134,7 @@ for j, name in enumerate(class_names):
     )
     table = pd.DataFrame(points)
     display(table)
-    # Store both exact rational coordinates and numeric versions.
+    # Сохраняем координаты как точные дроби и как десятичные числа.
     table["class"] = name
     for coord in ["FPR", "TPR"]:
         table[coord + "_fraction"] = table[coord].map(str)
@@ -255,7 +253,7 @@ thresholds43 = [0.30, 0.45, 0.65]
 threshold_table43 = manual_threshold_table(Y43[:, 1], S43[:, 1], thresholds43)
 display(threshold_table43)
 threshold_table43.to_csv(OUT / "slide43_thresholds.csv", index=False)
-# Logistic score is log-odds, not probability. These correspond to p≈0.269,0.5,0.731.
+# Score — логарифм шансов, а не вероятность. Пороги соответствуют p≈0.269, 0.5, 0.731.
 estate_thresholds = manual_threshold_table(
     y_test.to_numpy(),
     MODELS["LogisticRegression"].decision_function(X_test),
