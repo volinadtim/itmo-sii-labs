@@ -6,9 +6,9 @@ cells=[]
 def md(s): cells.append(nb.v4.new_markdown_cell(s.strip()))
 def code(s): cells.append(nb.v4.new_code_cell(s.strip()))
 cells.extend(t.cells[:2])
-md("""Данилов Тимофей, P3331.
+md("""Данилов Тимофей и Пивоваров Роман.
 
-В этой части сделал задания 1, 2 и 4. Задание 3 делает Роман Пивоваров. Из вариантов 3.1 и 4 выбрал поиск аномалий на своем датасете.
+Выполнены задания 1–4. Задания 1, 2 и 4 подготовил Тимофей, задание 3 подготовил Роман. В задании 3 использован пример со слайда 43, в остальных заданиях датасет квартир.
 
 Взял [объявления о недвижимости в Португалии](https://www.kaggle.com/datasets/luvathoms/portugal-real-estate-2024) из ЛР1–2. Ноутбук запускается из папки lab3 или корня репозитория.""")
 cells.append(t.cells[2])
@@ -181,7 +181,8 @@ display(Markdown(f"**Вывод.** Для SVC выбрал C={svm_search.best_pa
     "хотя оптимизируют разные функции потерь. По одному test я бы не выбирал победителя. "
     "В таблице CV видно, как веса меняют precision и recall."))""")
 cells.append(t.cells[4])
-md("""Задание 3 оставил Роману. Его решение 3.1–3.4 нужно вставить сюда перед сдачей общей работы.""")
+from lab3_part3 import cells as part3_cells
+cells.extend(part3_cells)
 cells.append(t.cells[5])
 md("""### Какие объявления считаю необычными
 
@@ -245,5 +246,5 @@ md("""### Источники
 - [SVC](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html).
 - [Поиск выбросов и новизны](https://scikit-learn.org/stable/modules/outlier_detection.html).""")
 n=nb.v4.new_notebook(cells=cells,metadata={'kernelspec':{'display_name':'Python 3','language':'python','name':'python3'}})
-nb.write(n,R/'lab3/Lab3_Danilov.ipynb')
+nb.write(n,R/'lab3/Lab3_Danilov_Pivovarov.ipynb')
 print('Built',len(cells),'cells')
