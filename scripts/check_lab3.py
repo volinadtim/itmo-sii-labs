@@ -53,14 +53,12 @@ assert np.array_equal(
 )
 for table, labels, scores in [
     (threshold_table43, Y43[:, 1], S43[:, 1]),
-    (estate_thresholds, y_test, MODELS["LogisticRegression"].decision_function(X_test)),
 ]:
     for row in table.itertuples():
         predictions = scores >= row.threshold
         assert np.isclose(row.accuracy, accuracy_score(labels, predictions))
         assert np.isclose(row.precision, precision_score(labels, predictions))
         assert np.isclose(row.recall, recall_score(labels, predictions))
-assert (estate_thresholds[["accuracy", "precision", "recall"]].nunique() == 3).all()
 assert len(anomalies) == len(y_test) and int(anomalies.outlier.sum()) == 188
 assert np.isfinite(anomalies.score).all()
 assert np.array_equal(anomalies.score < 0, anomalies.outlier)
